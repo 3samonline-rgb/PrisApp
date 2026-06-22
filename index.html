@@ -339,8 +339,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
     </div>
   </div>
   <div class="scroll-body">
-    <div style="margin-bottom:10px">
-      <button class="action-btn btn-print" onclick="printReport()">🖨️ &nbsp;Skriv ut rapport (A4)</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="action-btn btn-print" style="flex:1;margin-top:0" onclick="printReport()">🖨️ Skriv ut</button>
+      <button class="action-btn" style="flex:1;margin-top:0;background:rgba(59,130,246,.15);color:var(--blue2);border:1px solid rgba(59,130,246,.25)" onclick="copyHistoryText()">📋 Kopier</button>
     </div>
     <div class="card" id="histList">
       <div class="empty-state"><div class="emo">📋</div><p>Ingen lagrede beregninger ennå</p></div>
@@ -398,6 +399,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
         <div class="toggle on" id="togAutoSave" onclick="toggleSetting('autoSave')"><div class="toggle-knob"></div></div>
       </div>
     </div>
+    <div class="sect-lbl" style="margin-top:16px">Del med andre</div>
+    <div class="card">
+      <div class="setting-row" onclick="goTo('qrsync')" style="cursor:pointer">
+        <div class="setting-left"><div class="setting-icon" style="background:rgba(167,139,250,.12)">📱</div><div><div class="setting-label">QR Sync</div><div class="setting-sub">Del prishistorikk med en annen telefon</div></div></div>
+        <span style="color:var(--muted);font-size:18px">›</span>
+      </div>
+    </div>
     <div class="sect-lbl" style="margin-top:16px">Data</div>
     <div class="card">
       <div class="setting-row">
@@ -428,6 +436,33 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
     <div class="bnav-item" onclick="goTo('calc')"><div class="bnav-icon">🧮</div><div class="bnav-label">Kalkulator</div></div>
     <div class="bnav-item" onclick="goTo('hist')"><div class="bnav-icon">📋</div><div class="bnav-label">Historikk</div></div>
     <div class="bnav-item active" onclick="goTo('settings')"><div class="bnav-icon">⚙️</div><div class="bnav-label">Innstillinger</div></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: QR SYNC ══ -->
+<div class="screen hidden" id="scQrsync">
+  <div class="safe-top"></div>
+  <div class="nav">
+    <div class="nav-title">📱 QR Sync</div>
+    <div class="nav-btns"><div class="nav-btn" onclick="stopQRScanPA();goTo('settings')">✕</div></div>
+  </div>
+  <div class="scroll-body">
+    <div class="note-banner purple" style="margin:0 0 14px">
+      <span>💡</span><span>1. Trykk "Generer QR" på denne telefonen<br>2. Den andre åpner PrisApp → Innstillinger → QR Sync → Skann<br>3. Skann koden — prishistorikken overføres!</span>
+    </div>
+    <div class="card-header"><span style="font-size:16px">📤</span><span class="card-title">Del historikk via QR</span></div>
+    <div class="card" style="padding:20px;text-align:center;margin-top:10px">
+      <div id="qrCanvPA" style="margin:0 auto 14px;min-height:40px"></div>
+      <div id="qrStPA" style="font-size:13px;color:var(--muted);margin-bottom:14px">Trykk for å generere QR med prishistorikken</div>
+      <button class="action-btn btn-primary" onclick="generateQRPA()">📱 Generer QR-kode</button>
+    </div>
+    <div class="card-header" style="margin-top:8px"><span style="font-size:16px">📷</span><span class="card-title">Importer via kamera</span></div>
+    <div class="card" style="padding:16px;text-align:center;margin-top:10px">
+      <video id="qrVidPA" style="width:100%;border-radius:12px;background:#000;display:none;margin-bottom:12px;max-height:200px" autoplay playsinline></video>
+      <div id="qrScanStPA" style="font-size:13px;color:var(--muted);margin-bottom:12px">Bruk kamera for å skanne QR fra den andre telefonen</div>
+      <button class="action-btn btn-primary" id="qrScBtnPA" onclick="startQRScanPA()">📷 Start kamera</button>
+      <button class="action-btn btn-ghost" id="qrStBtnPA" onclick="stopQRScanPA()" style="display:none">✕ Stopp</button>
+    </div>
   </div>
 </div>
 
@@ -473,7 +508,7 @@ function fmtShort(n){if(n>=1000)return (n/1000).toFixed(1).replace(/\.0$/,"")+"k
 
 // ── NAVIGATION ──────────────────────────────────────────
 function goTo(screen){
-  var map={calc:"scCalc",hist:"scHist",settings:"scSettings"};
+  var map={calc:"scCalc",hist:"scHist",settings:"scSettings",qrsync:"scQrsync"};
   var screens=document.querySelectorAll(".screen");
   for(var i=0;i<screens.length;i++)screens[i].classList.add("hidden");
   document.getElementById(map[screen]).classList.remove("hidden");
@@ -486,6 +521,7 @@ function goTo(screen){
 // ── MODE TOGGLE ─────────────────────────────────────────
 function setMode(m){
   mode=m;
+  resetAutoSaveSession();
   var fwdBtn=document.getElementById("modeFwdBtn");
   var revBtn=document.getElementById("modeRevBtn");
   fwdBtn.className="mode-btn"+(m==="fwd"?" active-fwd":"");
@@ -623,25 +659,31 @@ function calcReverse(){
 }
 
 let autoTimer=null;
+let curSessionId=null; // tracks the in-progress calculation so it updates one row, not many
 function autoSaveDebounced(data){
   clearTimeout(autoTimer);
   autoTimer=setTimeout(function(){
     var name=document.getElementById("prodname").value.trim()||"Ukjent produkt";
     data.name=name;data.time=Date.now();
-    var exists=-1;
-    for(var i=0;i<history.length;i++){
-      var h=history[i];
-      if(h.name===name&&h.mode===data.mode){
-        if(data.mode==="fwd"&&Math.abs(h.gross-data.gross)<0.01&&h.antall===data.antall){exists=i;break;}
-        if(data.mode==="rev"&&Math.abs(h.salg-data.salg)<0.01){exists=i;break;}
+    if(curSessionId!==null){
+      var idx=-1;
+      for(var i=0;i<history.length;i++){if(history[i].sid===curSessionId){idx=i;break;}}
+      if(idx>=0){
+        data.sid=curSessionId;
+        history[idx]=data;
+        lsw(K.hist,history);
+        return;
       }
     }
-    if(exists>=0)return;
+    curSessionId="sid_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);
+    data.sid=curSessionId;
     history.unshift(data);
     if(history.length>100)history.pop();
     lsw(K.hist,history);
-  },1200);
+  },2000);
 }
+// Starting a fresh calculation (clear, mode switch, or loading history) should start a new session
+function resetAutoSaveSession(){curSessionId=null;}
 
 function saveToHistory(){
   var name=document.getElementById("prodname").value.trim()||"Ukjent produkt";
@@ -714,6 +756,36 @@ function clearHistory(){
 }
 
 // ── PRINT A4 ─────────────────────────────────────────────
+// ── COPY HISTORY ─────────────────────────────────────────
+function copyHistoryText(){
+  if(history.length===0){showToast("⚠️ Ingen data å kopiere");return;}
+  var now=new Date().toLocaleDateString("no-NO",{day:"2-digit",month:"long",year:"numeric"});
+  var t="💰 PRISOVERSIKT – "+now+"\n"+"─".repeat(30)+"\n";
+  var totalFort=0;
+  for(var i=0;i<history.length;i++){
+    var h=history[i];
+    totalFort+=h.fort;
+    var isRev=h.mode==="rev";
+    var mvaStr=h.mva>0?"MVA "+h.mva+"%":"Uten MVA";
+    t+="\n"+(i+1)+". "+h.name+(isRev?" (baklengs)":"")+"\n";
+    if(isRev){
+      t+="   Salgspris: "+fmt(h.salg)+" → Maks innkjøp: "+fmt(h.kostUtenMva)+"\n";
+    }else{
+      t+="   "+h.antall+" stk · Salgspris: "+fmt(h.salg)+"\n";
+    }
+    t+="   "+mvaStr+" · ×"+h.faktor+" · Fortjeneste: "+fmt(h.fort)+"\n";
+  }
+  t+="\n"+"─".repeat(30)+"\nTotal fortjeneste: "+fmt(totalFort)+"\nAntall produkter: "+history.length;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(t).then(function(){showToast("📋 Kopiert!");}).catch(function(){fallbackCopyHist(t);});
+  }else fallbackCopyHist(t);
+}
+function fallbackCopyHist(t){
+  var ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();
+  try{document.execCommand("copy");showToast("📋 Kopiert!");}catch(e){showToast("⚠️ Kunne ikke kopiere");}
+  document.body.removeChild(ta);
+}
+
 function printReport(){
   if(history.length===0){showToast("⚠️ Ingen data å skrive ut");return;}
   var now=new Date().toLocaleDateString("no-NO",{day:"2-digit",month:"long",year:"numeric"});
@@ -788,8 +860,75 @@ function resetAllData(){
   location.reload();
 }
 
+// ── QR SYNC ──────────────────────────────────────────────
+let qrStreamPA=null;
+function generateQRPA(){
+  var data={history:history};
+  var json=JSON.stringify(data);
+  var enc=encodeURIComponent(json);
+  var el=document.getElementById("qrCanvPA");var st=document.getElementById("qrStPA");
+  if(enc.length>2900){
+    el.innerHTML="<div style=\"font-size:13px;color:var(--orange);padding:10px\">Historikken er for stor for QR. Bruk Eksporter i stedet.</div>";
+    st.textContent="For stor for QR — bruk Eksporter JSON";
+    return;
+  }
+  if(history.length===0){
+    showToast("⚠️ Ingen historikk å dele");
+    return;
+  }
+  el.innerHTML="<img src=\"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="+enc+"\" style=\"border-radius:12px;width:220px;height:220px\" onerror=\"this.parentElement.innerHTML='<div style=padding:10px;color:var(--red)>Feil ved generering. Prøv Eksporter i stedet.</div>'\">";
+  st.textContent="QR-kode klar! La den andre telefonen skanne den.";
+  showToast("✅ QR-kode generert!");
+}
+function startQRScanPA(){
+  var video=document.getElementById("qrVidPA");
+  var scBtn=document.getElementById("qrScBtnPA");var stBtn=document.getElementById("qrStBtnPA");
+  var status=document.getElementById("qrScanStPA");
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(function(stream){
+    qrStreamPA=stream;video.srcObject=stream;video.style.display="block";
+    scBtn.style.display="none";stBtn.style.display="block";
+    status.textContent="Kamera aktivt — hold QR-koden foran kameraet...";
+    if("BarcodeDetector" in window){
+      var det=new BarcodeDetector({formats:["qr_code"]});
+      var loop=setInterval(function(){
+        if(!qrStreamPA){clearInterval(loop);return;}
+        det.detect(video).then(function(bc){
+          if(bc.length>0){
+            clearInterval(loop);stopQRScanPA();
+            try{
+              var d=JSON.parse(decodeURIComponent(bc[0].rawValue));
+              if(d.history&&d.history.length){
+                var added=0;
+                for(var i=0;i<d.history.length;i++){
+                  var nh=d.history[i];
+                  var dup=false;
+                  for(var j=0;j<history.length;j++){if(history[j].time===nh.time&&history[j].name===nh.name){dup=true;break;}}
+                  if(!dup){history.unshift(nh);added++;}
+                }
+                if(history.length>100)history=history.slice(0,100);
+                lsw(K.hist,history);
+                status.textContent="✅ "+added+" beregninger importert!";
+                showToast("✅ QR Sync vellykket!");
+              }
+            }catch(e){status.textContent="⚠️ Ugyldig QR-kode";}
+          }
+        }).catch(function(){});
+      },500);
+    }else{
+      status.textContent="QR-skanning støttes ikke i denne nettleseren. Bruk Eksporter/Importer i stedet.";
+    }
+  }).catch(function(){status.textContent="⚠️ Kamera ikke tilgjengelig. Sjekk tillatelser i Safari.";});
+}
+function stopQRScanPA(){
+  if(qrStreamPA){qrStreamPA.getTracks().forEach(function(t){t.stop();});qrStreamPA=null;}
+  var video=document.getElementById("qrVidPA");if(video)video.style.display="none";
+  var scBtn=document.getElementById("qrScBtnPA");var stBtn=document.getElementById("qrStBtnPA");
+  if(scBtn)scBtn.style.display="block";if(stBtn)stBtn.style.display="none";
+}
+
 // ── CLEAR ────────────────────────────────────────────────
 function clearAll(){
+  resetAutoSaveSession();
   document.getElementById("gross").value="";
   document.getElementById("antall").value="";
   document.getElementById("salgPrice").value="";
