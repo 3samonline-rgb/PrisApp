@@ -687,12 +687,13 @@ function resetAutoSaveSession(){curSessionId=null;}
 
 function saveToHistory(){
   var name=document.getElementById("prodname").value.trim()||"Ukjent produkt";
+  var data;
   if(mode==="fwd"){
     var g=parseFloat(document.getElementById("gross").value)||0;
     if(g<=0){showToast("⚠️ Ingen beregning å lagre");return;}
     var a=parseFloat(document.getElementById("antall").value)||1;
     var prStk=g/a;var kost=prStk*(1+mva/100);var salg=kost*faktor;var fort=(salg-kost)*a;
-    history.unshift({mode:"fwd",name:name,gross:g,antall:a,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,time:Date.now()});
+    data={mode:"fwd",name:name,gross:g,antall:a,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,time:Date.now()};
   }else{
     var sp=parseFloat(document.getElementById("salgPrice").value)||0;
     if(sp<=0){showToast("⚠️ Ingen beregning å lagre");return;}
@@ -700,8 +701,24 @@ function saveToHistory(){
     var mvaAmt=mva>0?kostMVA*(mva/(100+mva)):0;
     var kostUtenMva=kostMVA-mvaAmt;
     var fort2=sp-kostMVA;
-    history.unshift({mode:"rev",name:name,salg:sp,mva:mva,faktor:faktor,kost:kostMVA,kostUtenMva:kostUtenMva,fort:fort2,time:Date.now()});
+    data={mode:"rev",name:name,salg:sp,mva:mva,faktor:faktor,kost:kostMVA,kostUtenMva:kostUtenMva,fort:fort2,time:Date.now()};
   }
+  // Reuse the same row as the current auto-save session, if one exists, instead of adding a new one
+  clearTimeout(autoTimer);
+  if(curSessionId!==null){
+    var idx=-1;
+    for(var i=0;i<history.length;i++){if(history[i].sid===curSessionId){idx=i;break;}}
+    if(idx>=0){
+      data.sid=curSessionId;
+      history[idx]=data;
+      lsw(K.hist,history);
+      showToast("✅ Lagret i historikk");
+      return;
+    }
+  }
+  curSessionId="sid_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);
+  data.sid=curSessionId;
+  history.unshift(data);
   if(history.length>100)history.pop();
   lsw(K.hist,history);
   showToast("✅ Lagret i historikk");
