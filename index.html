@@ -250,10 +250,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
       <div class="input-row" style="border-bottom:none">
         <div class="input-row-icon" style="background:rgba(34,211,238,.1)">📦</div>
         <div class="input-row-body">
-          <label>Antall enheter</label>
-          <input id="antall" type="number" inputmode="numeric" placeholder="1" oninput="calc()">
+          <label>Antall / Vekt</label>
+          <input id="antall" type="number" inputmode="decimal" placeholder="1" oninput="calc()">
         </div>
-        <div class="input-suffix">stk</div>
+        <button id="unitToggle" onclick="toggleUnit()" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.25);color:var(--cyan);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;flex-shrink:0">stk</button>
       </div>
     </div>
 
@@ -274,7 +274,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
     <div class="card" id="fwdResults">
       <div class="card-header"><span style="font-size:16px">🔢</span><span class="card-title">Beregning</span></div>
       <div class="res-row">
-        <span class="res-row-label">Pris pr. stk (eks. MVA)</span>
+        <span class="res-row-label" id="rPrStkLbl">Pris pr. stk (eks. MVA)</span>
         <span class="res-row-val" id="rPrStk" style="color:var(--text)">—</span>
       </div>
       <div class="res-row" id="mvaRow">
@@ -495,6 +495,15 @@ function ls(k,d){try{var v=localStorage.getItem(k);return v!=null?JSON.parse(v):
 function lsw(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){showToast("⚠️ Lagringsfeil");}}
 
 let mode="fwd"; // 'fwd' = Kjøp->Salg, 'rev' = Salg->Kjøp
+let curUnit="stk"; // 'stk' or 'kg' — what the "antall" field represents
+function toggleUnit(){
+  curUnit=curUnit==="stk"?"kg":"stk";
+  var btn=document.getElementById("unitToggle");
+  btn.textContent=curUnit;
+  document.getElementById("antall").placeholder=curUnit==="kg"?"f.eks. 4.5":"1";
+  updateFwdUnitLabels();
+  calc();
+}
 let mva=15, faktor=1.7;
 let settings=ls(K.sett,{profit:true,autoSave:true,defaultFaktor:1.7});
 let history=ls(K.hist,[]);
@@ -538,6 +547,19 @@ function setMode(m){
 }
 
 // ── MVA 3-WAY ───────────────────────────────────────────
+function unitLabelSuffix(){return curUnit==="kg"?"kg":"stk";}
+function updateFwdUnitLabels(){
+  var u=unitLabelSuffix();
+  var rPrStkLbl=document.getElementById("rPrStkLbl");
+  if(rPrStkLbl)rPrStkLbl.textContent="Pris pr. "+u+" (eks. MVA)";
+  if(mva===0){
+    document.getElementById("rKostLbl").textContent="Kostpris pr. "+u+" (ink. MVA)";
+  }else{
+    document.getElementById("rMvaLbl").textContent="+ MVA "+mva+"% pr. "+u;
+    document.getElementById("rKostLbl").textContent="Kostpris pr. "+u+" m/MVA";
+  }
+}
+
 function setMva(v){
   mva=v;
   document.getElementById("seg0").className="seg3-btn"+(v===0?" active-none":"");
@@ -547,23 +569,21 @@ function setMva(v){
   var bannerText=document.getElementById("mvaBannerText");
   var mvaRow=document.getElementById("mvaRow");
   var revMvaRow=document.getElementById("revMvaRow");
+  var u=unitLabelSuffix();
   if(v===0){
     banner.className="note-banner success";
     bannerText.textContent="Prisen er allerede inkl. MVA – ingen tillegg";
     mvaRow.style.display="none";
     if(revMvaRow)revMvaRow.style.display="none";
-    document.getElementById("rKostLbl").textContent="Kostpris pr. stk (ink. MVA)";
-    document.getElementById("rRevKostLbl").textContent="Kostpris (ink. MVA)";
   }else{
     banner.className="note-banner info";
-    bannerText.textContent="MVA "+v+"% legges til innkjøpspris pr. stk";
+    bannerText.textContent="MVA "+v+"% legges til innkjøpspris pr. "+u;
     mvaRow.style.display="flex";
     if(revMvaRow)revMvaRow.style.display="flex";
-    document.getElementById("rMvaLbl").textContent="+ MVA "+v+"% pr. stk";
-    document.getElementById("rKostLbl").textContent="Kostpris pr. stk m/MVA";
     document.getElementById("rRevMvaLbl").textContent="− MVA "+v+"%";
     document.getElementById("rRevKostLbl").textContent="Kostpris (m/MVA)";
   }
+  updateFwdUnitLabels();
   calc();
 }
 
@@ -619,14 +639,18 @@ function calcForward(){
   document.getElementById("rKost").textContent=fmt(kost);
   document.getElementById("heroPrice").textContent=fmt(salg);
 
+  var unitLbl=curUnit==="kg"?"kg":"stk";
+  var perUnitLbl=curUnit==="kg"?"pr. kg":"pr. stk";
+  document.querySelector("#fwdHero .hero-label").textContent="Salgspris "+perUnitLbl;
+
   var chips="<div class=\"chip orange\">×"+faktor+"</div>";
   if(mva>0)chips+="<div class=\"chip blue\">MVA "+mva+"%</div>";
   else chips+="<div class=\"chip\">Uten MVA</div>";
   if(settings.profit)chips+="<div class=\"chip green\">+"+fmt(fort)+" fortjeneste</div>";
-  chips+="<div class=\"chip\">"+a+" stk</div>";
+  chips+="<div class=\"chip\">"+a+" "+unitLbl+"</div>";
   document.getElementById("heroChips").innerHTML=chips;
 
-  if(settings.autoSave&&g>0)autoSaveDebounced({mode:"fwd",gross:g,antall:a,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort});
+  if(settings.autoSave&&g>0)autoSaveDebounced({mode:"fwd",gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort});
 }
 
 function calcReverse(){
@@ -693,7 +717,7 @@ function saveToHistory(){
     if(g<=0){showToast("⚠️ Ingen beregning å lagre");return;}
     var a=parseFloat(document.getElementById("antall").value)||1;
     var prStk=g/a;var kost=prStk*(1+mva/100);var salg=kost*faktor;var fort=(salg-kost)*a;
-    data={mode:"fwd",name:name,gross:g,antall:a,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,time:Date.now()};
+    data={mode:"fwd",name:name,gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,time:Date.now()};
   }else{
     var sp=parseFloat(document.getElementById("salgPrice").value)||0;
     if(sp<=0){showToast("⚠️ Ingen beregning å lagre");return;}
@@ -741,7 +765,7 @@ function renderHistory(){
     var priceVal=isRev?h.kostUtenMva:h.salg;
     var meta=isRev
       ? "Salgspris → Kjøp · "+mvaStr+" · ×"+h.faktor+" · "+ts
-      : h.antall+" stk · "+mvaStr+" · ×"+h.faktor+" · "+ts;
+      : h.antall+" "+(h.unit||"stk")+" · "+mvaStr+" · ×"+h.faktor+" · "+ts;
     var modeIcon=isRev?"🔍 ":"";
     return "<div class=\"hist-item\" onclick=\"loadFromHistory("+i+")\"><div class=\"hist-dot\" style=\"background:"+c+"\"></div><div class=\"hist-body\"><div class=\"hist-name\">"+modeIcon+h.name+"</div><div class=\"hist-meta\">"+meta+"</div></div><div><div class=\"hist-price"+(isRev?" rev":"")+"\">"+fmt(priceVal)+"</div><div class=\"hist-profit\">+"+fmtShort(h.fort)+"</div></div></div>";
   }).join("");
@@ -757,6 +781,10 @@ function loadFromHistory(i){
     setMode("fwd");
     document.getElementById("gross").value=h.gross;
     document.getElementById("antall").value=h.antall;
+    curUnit=h.unit||"stk";
+    document.getElementById("unitToggle").textContent=curUnit;
+    document.getElementById("antall").placeholder=curUnit==="kg"?"f.eks. 4.5":"1";
+    updateFwdUnitLabels();
   }else{
     setMode("rev");
     document.getElementById("salgPrice").value=h.salg;
@@ -788,7 +816,7 @@ function copyHistoryText(){
     if(isRev){
       t+="   Salgspris: "+fmt(h.salg)+" → Maks innkjøp: "+fmt(h.kostUtenMva)+"\n";
     }else{
-      t+="   "+h.antall+" stk · Salgspris: "+fmt(h.salg)+"\n";
+      t+="   "+h.antall+" "+(h.unit||"stk")+" · Salgspris: "+fmt(h.salg)+"\n";
     }
     t+="   "+mvaStr+" · ×"+h.faktor+" · Fortjeneste: "+fmt(h.fort)+"\n";
   }
