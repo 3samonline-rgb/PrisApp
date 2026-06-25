@@ -109,6 +109,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
 .chip.orange{background:rgba(249,115,22,.12);border-color:rgba(249,115,22,.25);color:var(--orange)}
 .chip.blue{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.25);color:var(--blue2)}
 .chip.purple{background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.25);color:var(--purple)}
+.round-btn{font-size:12px;font-weight:700;padding:8px 14px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--muted2);cursor:pointer;font-family:var(--font);transition:all .15s}
+.lm .round-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1)}
+.round-btn:active{transform:scale(.93);background:rgba(59,130,246,.15);color:var(--blue2);border-color:rgba(59,130,246,.3)}
 .action-btn{width:100%;padding:17px;border-radius:16px;border:none;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer;letter-spacing:-.2px;transition:all .15s;margin-top:4px}
 .action-btn:active{transform:scale(.97)}
 .btn-primary{background:linear-gradient(135deg,var(--blue),#1d4ed8);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.3)}
@@ -243,7 +246,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
         <div class="input-row-icon" style="background:rgba(59,130,246,.12)">🧾</div>
         <div class="input-row-body">
           <label>Grossistpris (total faktura)</label>
-          <input id="gross" type="number" inputmode="decimal" placeholder="0.00" oninput="calc()">
+          <input id="gross" type="text" inputmode="decimal" placeholder="0.00" oninput="onNumInput(this);calc()">
         </div>
         <div class="input-suffix">kr</div>
       </div>
@@ -251,7 +254,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
         <div class="input-row-icon" style="background:rgba(34,211,238,.1)">📦</div>
         <div class="input-row-body">
           <label>Antall / Vekt</label>
-          <input id="antall" type="number" inputmode="decimal" placeholder="1" oninput="calc()">
+          <input id="antall" type="text" inputmode="decimal" placeholder="1" oninput="onNumInput(this);calc()">
         </div>
         <button id="unitToggle" onclick="toggleUnit()" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.25);color:var(--cyan);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;flex-shrink:0">stk</button>
       </div>
@@ -264,7 +267,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
         <div class="input-row-icon" style="background:rgba(167,139,250,.12)">💵</div>
         <div class="input-row-body">
           <label>Salgspris pr. stk (det kunden betaler)</label>
-          <input id="salgPrice" type="number" inputmode="decimal" placeholder="0.00" oninput="calc()">
+          <input id="salgPrice" type="text" inputmode="decimal" placeholder="0.00" oninput="onNumInput(this);calc()">
         </div>
         <div class="input-suffix">kr</div>
       </div>
@@ -306,9 +309,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
 
     <!-- Hero FORWARD -->
     <div class="hero-result" id="fwdHero">
-      <div class="hero-label">Salgspris pr. stk</div>
+      <div class="hero-label" id="fwdHeroLabel">Salgspris pr. stk</div>
       <div class="hero-price" id="heroPrice">— kr</div>
       <div class="hero-chips" id="heroChips"><div class="chip">Tast inn pris og antall</div></div>
+      <div style="display:flex;gap:7px;justify-content:center;margin-top:14px;flex-wrap:wrap" id="roundBtns">
+        <button onclick="roundPrice('int')" class="round-btn">Hele kr</button>
+        <button onclick="roundPrice('90')" class="round-btn">,90</button>
+        <button onclick="roundPrice('50')" class="round-btn">,50</button>
+        <button onclick="roundPrice('exact')" class="round-btn">Nøyaktig</button>
+      </div>
+    </div>
+
+    <!-- Manual price override -->
+    <div class="card" id="manualPriceCard" style="display:none">
+      <div class="card-header"><span style="font-size:16px">✏️</span><span class="card-title">Egen salgspris</span></div>
+      <div style="padding:10px 16px 16px">
+        <div style="font-size:12px;color:var(--muted2);margin-bottom:10px">Skriv inn din egen pris — overstyrer beregningen og viser ekte fortjeneste</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="manualPrice" type="text" inputmode="decimal" placeholder="f.eks. 49.90" oninput="onNumInput(this);applyManualPrice()" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;font-size:18px;font-weight:700;color:var(--purple);font-family:var(--mono);text-align:center;outline:none">
+          <button onclick="clearManualPrice()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--red);border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer">✕</button>
+        </div>
+        <div id="manualPriceImpact" style="font-size:12px;color:var(--muted2);text-align:center;margin-top:10px"></div>
+      </div>
     </div>
 
     <!-- Hero REVERSE -->
@@ -318,6 +340,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
       <div class="hero-chips" id="revHeroChips"><div class="chip">Tast inn salgspris</div></div>
     </div>
 
+    <button class="action-btn" style="background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3);margin-bottom:8px" onclick="shareSingleCalcWA()">💬 Del denne beregningen</button>
     <button class="action-btn btn-ghost" onclick="clearAll()" style="margin-bottom:8px">↺ Nullstill</button>
 
   </div>
@@ -339,9 +362,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
     </div>
   </div>
   <div class="scroll-body">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="action-btn btn-print" style="flex:1;margin-top:0" onclick="printReport()">🖨️ Full rapport</button>
+      <button class="action-btn" style="flex:1;margin-top:0;background:rgba(245,158,11,.15);color:var(--orange);border:1px solid rgba(245,158,11,.25)" onclick="printStaffList()">👷 Ansatte</button>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="action-btn btn-print" style="flex:1;margin-top:0" onclick="printReport()">🖨️ Skriv ut</button>
       <button class="action-btn" style="flex:1;margin-top:0;background:rgba(59,130,246,.15);color:var(--blue2);border:1px solid rgba(59,130,246,.25)" onclick="copyHistoryText()">📋 Kopier</button>
+      <button class="action-btn" style="flex:1;margin-top:0;background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3)" onclick="shareHistoryWA()">💬 WhatsApp</button>
     </div>
     <div class="card" id="histList">
       <div class="empty-state"><div class="emo">📋</div><p>Ingen lagrede beregninger ennå</p></div>
@@ -513,6 +540,23 @@ function applyDark(){document.body.classList.toggle("lm",!darkMode);var t=docume
 applyDark();
 
 function fmt(n,d){if(d===undefined)d=2;return n.toLocaleString("no-NO",{minimumFractionDigits:d,maximumFractionDigits:d})+" kr";}
+
+// Lets people type either , or . as decimal separator (Norwegian keyboards use comma)
+function onNumInput(el){
+  var v=el.value;
+  v=v.replace(/,/g,".");
+  v=v.replace(/[^0-9.]/g,"");
+  var firstDot=v.indexOf(".");
+  if(firstDot!==-1){
+    v=v.slice(0,firstDot+1)+v.slice(firstDot+1).replace(/\./g,"");
+  }
+  if(v!==el.value)el.value=v;
+}
+function parseNum(v){
+  if(v===null||v===undefined)return 0;
+  var n=parseFloat(String(v).replace(/,/g,"."));
+  return isNaN(n)?0:n;
+}
 function fmtShort(n){if(n>=1000)return (n/1000).toFixed(1).replace(/\.0$/,"")+"k kr";return fmt(n);}
 
 // ── NAVIGATION ──────────────────────────────────────────
@@ -531,6 +575,11 @@ function goTo(screen){
 function setMode(m){
   mode=m;
   resetAutoSaveSession();
+  manualPriceActive=false;
+  var mpInput=document.getElementById("manualPrice");
+  if(mpInput)mpInput.value="";
+  var mpImpact=document.getElementById("manualPriceImpact");
+  if(mpImpact)mpImpact.textContent="";
   var fwdBtn=document.getElementById("modeFwdBtn");
   var revBtn=document.getElementById("modeRevBtn");
   fwdBtn.className="mode-btn"+(m==="fwd"?" active-fwd":"");
@@ -603,7 +652,7 @@ function updateQBtns(v){
   }
 }
 function confirmSheet(){
-  var v=parseFloat(document.getElementById("sheetInput").value);
+  var v=parseNum(document.getElementById("sheetInput").value);
   if(!isNaN(v)&&v>0){
     faktor=v;
     var d="×"+v;
@@ -619,13 +668,19 @@ function calc(){
   else calcReverse();
 }
 
+let lastCalc=null; // stores the most recent forward calculation for rounding/manual override
+let manualPriceActive=false;
+
 function calcForward(){
-  var g=parseFloat(document.getElementById("gross").value)||0;
-  var a=parseFloat(document.getElementById("antall").value)||1;
+  var g=parseNum(document.getElementById("gross").value)||0;
+  var a=parseNum(document.getElementById("antall").value)||1;
   if(g<=0){
     ["rPrStk","rMvaAmt","rKost"].forEach(function(id){document.getElementById(id).textContent="—";});
     document.getElementById("heroPrice").textContent="— kr";
     document.getElementById("heroChips").innerHTML="<div class=\"chip\">Tast inn pris og antall</div>";
+    document.getElementById("manualPriceCard").style.display="none";
+    document.getElementById("roundBtns").style.display="none";
+    lastCalc=null;
     return;
   }
   var prStk=g/a;
@@ -634,27 +689,40 @@ function calcForward(){
   var salg=kost*faktor;
   var fort=(salg-kost)*a;
 
+  lastCalc={prStk:prStk,mvaAmt:mvaAmt,kost:kost,salg:salg,fort:fort,antall:a};
+
   document.getElementById("rPrStk").textContent=fmt(prStk);
   document.getElementById("rMvaAmt").textContent=mva>0?fmt(mvaAmt):"—";
   document.getElementById("rKost").textContent=fmt(kost);
-  document.getElementById("heroPrice").textContent=fmt(salg);
+  document.getElementById("manualPriceCard").style.display="block";
+  document.getElementById("roundBtns").style.display="flex";
 
   var unitLbl=curUnit==="kg"?"kg":"stk";
   var perUnitLbl=curUnit==="kg"?"pr. kg":"pr. stk";
-  document.querySelector("#fwdHero .hero-label").textContent="Salgspris "+perUnitLbl;
+  document.getElementById("fwdHeroLabel").textContent="Salgspris "+perUnitLbl;
 
-  var chips="<div class=\"chip orange\">×"+faktor+"</div>";
-  if(mva>0)chips+="<div class=\"chip blue\">MVA "+mva+"%</div>";
-  else chips+="<div class=\"chip\">Uten MVA</div>";
-  if(settings.profit)chips+="<div class=\"chip green\">+"+fmt(fort)+" fortjeneste</div>";
-  chips+="<div class=\"chip\">"+a+" "+unitLbl+"</div>";
-  document.getElementById("heroChips").innerHTML=chips;
+  if(manualPriceActive){
+    renderManualPriceResult();
+  }else{
+    document.getElementById("heroPrice").textContent=fmt(salg);
+    var chips="<div class=\"chip orange\">×"+faktor+"</div>";
+    if(mva>0)chips+="<div class=\"chip blue\">MVA "+mva+"%</div>";
+    else chips+="<div class=\"chip\">Uten MVA</div>";
+    if(settings.profit)chips+="<div class=\"chip green\">+"+fmt(fort)+" fortjeneste</div>";
+    chips+="<div class=\"chip\">"+a+" "+unitLbl+"</div>";
+    document.getElementById("heroChips").innerHTML=chips;
+  }
 
-  if(settings.autoSave&&g>0)autoSaveDebounced({mode:"fwd",gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort});
+  var effSalg=salg, effFort=fort;
+  if(manualPriceActive){
+    var mp=parseNum(document.getElementById("manualPrice").value);
+    if(mp>0){effSalg=mp;effFort=(mp-kost)*a;}
+  }
+  if(settings.autoSave&&g>0)autoSaveDebounced({mode:"fwd",gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:effSalg,fort:effFort,manual:manualPriceActive});
 }
 
 function calcReverse(){
-  var salg=parseFloat(document.getElementById("salgPrice").value)||0;
+  var salg=parseNum(document.getElementById("salgPrice").value)||0;
   if(salg<=0){
     ["rSalgGiven","rRevKost","rRevMva"].forEach(function(id){document.getElementById(id).textContent="—";});
     document.getElementById("revHeroPrice").textContent="— kr";
@@ -680,6 +748,58 @@ function calcReverse(){
   document.getElementById("revHeroChips").innerHTML=chips;
 
   if(settings.autoSave&&salg>0)autoSaveDebounced({mode:"rev",salg:salg,mva:mva,faktor:faktor,kost:kostMVA,kostUtenMva:prStkUtenMva,fort:fort});
+}
+
+// ── MANUAL PRICE OVERRIDE ──────────────────────────────────
+function applyManualPrice(){
+  var mp=parseNum(document.getElementById("manualPrice").value);
+  manualPriceActive=mp>0;
+  if(manualPriceActive)renderManualPriceResult();
+  else if(lastCalc)calc(); // restore calculated price if field cleared
+}
+function renderManualPriceResult(){
+  if(!lastCalc)return;
+  var mp=parseNum(document.getElementById("manualPrice").value);
+  if(mp<=0)return;
+  var a=lastCalc.antall;
+  var fortReal=(mp-lastCalc.kost)*a;
+  document.getElementById("heroPrice").textContent=fmt(mp);
+  var unitLbl=curUnit==="kg"?"kg":"stk";
+  var chips="<div class=\"chip purple\">✏️ Egen pris</div>";
+  if(settings.profit){
+    var profitClass=fortReal>=0?"green":"orange";
+    chips+="<div class=\"chip "+(fortReal>=0?"green":"orange")+"\">"+(fortReal>=0?"+":"")+fmt(fortReal)+" fortjeneste</div>";
+  }
+  chips+="<div class=\"chip\">"+a+" "+unitLbl+"</div>";
+  document.getElementById("heroChips").innerHTML=chips;
+  var diffPct=((mp-lastCalc.salg)/lastCalc.salg*100);
+  var impactTxt=diffPct>=0
+    ? "+"+diffPct.toFixed(1)+"% høyere enn beregnet pris ("+fmt(lastCalc.salg)+")"
+    : diffPct.toFixed(1)+"% lavere enn beregnet pris ("+fmt(lastCalc.salg)+")";
+  document.getElementById("manualPriceImpact").textContent=impactTxt;
+}
+function clearManualPrice(){
+  document.getElementById("manualPrice").value="";
+  manualPriceActive=false;
+  document.getElementById("manualPriceImpact").textContent="";
+  if(lastCalc)calc();
+}
+function roundPrice(type){
+  if(!lastCalc)return;
+  var base=manualPriceActive?parseNum(document.getElementById("manualPrice").value):lastCalc.salg;
+  if(base<=0)base=lastCalc.salg;
+  var rounded;
+  if(type==="int")rounded=Math.round(base);
+  else if(type==="90")rounded=Math.floor(base)+0.90;
+  else if(type==="50")rounded=Math.floor(base)+0.50;
+  else rounded=lastCalc.salg; // exact = back to calculated value
+  if(type==="exact"){
+    clearManualPrice();
+    return;
+  }
+  document.getElementById("manualPrice").value=rounded.toFixed(2);
+  manualPriceActive=true;
+  renderManualPriceResult();
 }
 
 let autoTimer=null;
@@ -713,13 +833,17 @@ function saveToHistory(){
   var name=document.getElementById("prodname").value.trim()||"Ukjent produkt";
   var data;
   if(mode==="fwd"){
-    var g=parseFloat(document.getElementById("gross").value)||0;
+    var g=parseNum(document.getElementById("gross").value)||0;
     if(g<=0){showToast("⚠️ Ingen beregning å lagre");return;}
-    var a=parseFloat(document.getElementById("antall").value)||1;
+    var a=parseNum(document.getElementById("antall").value)||1;
     var prStk=g/a;var kost=prStk*(1+mva/100);var salg=kost*faktor;var fort=(salg-kost)*a;
-    data={mode:"fwd",name:name,gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,time:Date.now()};
+    if(manualPriceActive){
+      var mp=parseNum(document.getElementById("manualPrice").value);
+      if(mp>0){salg=mp;fort=(mp-kost)*a;}
+    }
+    data={mode:"fwd",name:name,gross:g,antall:a,unit:curUnit,mva:mva,faktor:faktor,kost:kost,salg:salg,fort:fort,manual:manualPriceActive,time:Date.now()};
   }else{
-    var sp=parseFloat(document.getElementById("salgPrice").value)||0;
+    var sp=parseNum(document.getElementById("salgPrice").value)||0;
     if(sp<=0){showToast("⚠️ Ingen beregning å lagre");return;}
     var kostMVA=sp/faktor;
     var mvaAmt=mva>0?kostMVA*(mva/(100+mva)):0;
@@ -785,13 +909,23 @@ function loadFromHistory(i){
     document.getElementById("unitToggle").textContent=curUnit;
     document.getElementById("antall").placeholder=curUnit==="kg"?"f.eks. 4.5":"1";
     updateFwdUnitLabels();
+    document.getElementById("manualPrice").value="";
+    manualPriceActive=false;
+    document.getElementById("manualPriceImpact").textContent="";
   }else{
     setMode("rev");
     document.getElementById("salgPrice").value=h.salg;
   }
   setMva(h.mva);
   goTo("calc");
-  setTimeout(calc,100);
+  setTimeout(function(){
+    calc();
+    if(h.mode==="fwd"&&h.manual){
+      document.getElementById("manualPrice").value=h.salg.toFixed(2);
+      manualPriceActive=true;
+      renderManualPriceResult();
+    }
+  },100);
   showToast("📥 Lastet: "+h.name);
 }
 
@@ -829,6 +963,83 @@ function fallbackCopyHist(t){
   var ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();
   try{document.execCommand("copy");showToast("📋 Kopiert!");}catch(e){showToast("⚠️ Kunne ikke kopiere");}
   document.body.removeChild(ta);
+}
+
+// ── SHARE SINGLE CALCULATION ───────────────────────────────
+function shareSingleCalcWA(){
+  var name=document.getElementById("prodname").value.trim()||"Ukjent produkt";
+  var t="💰 PRISBEREGNING\n"+"─".repeat(26)+"\n📦 "+name+"\n\n";
+  if(mode==="fwd"){
+    if(!lastCalc){showToast("⚠️ Ingen beregning å dele");return;}
+    var a=lastCalc.antall;
+    var u=curUnit==="kg"?"kg":"stk";
+    var effSalg=lastCalc.salg, effFort=lastCalc.fort;
+    if(manualPriceActive){
+      var mp=parseNum(document.getElementById("manualPrice").value);
+      if(mp>0){effSalg=mp;effFort=(mp-lastCalc.kost)*a;}
+    }
+    t+="Innkjøp: "+fmt(parseNum(document.getElementById("gross").value))+" ("+a+" "+u+")\n";
+    t+="Pris pr. "+u+": "+fmt(lastCalc.prStk)+"\n";
+    if(mva>0)t+="+ MVA "+mva+"%: "+fmt(lastCalc.mvaAmt)+"\n";
+    t+="Kostpris pr. "+u+": "+fmt(lastCalc.kost)+"\n\n";
+    t+="✅ Salgspris: "+fmt(effSalg)+(manualPriceActive?" (egen pris)":"")+"\n";
+    t+="📈 Fortjeneste: "+fmt(effFort)+" ("+a+" "+u+")\n";
+    t+="\nFaktor: ×"+faktor+" · MVA: "+mva+"%";
+  }else{
+    var salg=parseNum(document.getElementById("salgPrice").value);
+    if(salg<=0){showToast("⚠️ Ingen beregning å dele");return;}
+    var kostMVA=salg/faktor;
+    var mvaAmt=mva>0?kostMVA*(mva/(100+mva)):0;
+    var kostUtenMva=kostMVA-mvaAmt;
+    t+="🔍 Baklengs beregning\n";
+    t+="Salgspris: "+fmt(salg)+"\n";
+    t+="Kostpris (m/MVA): "+fmt(kostMVA)+"\n";
+    if(mva>0)t+="− MVA "+mva+"%: "+fmt(mvaAmt)+"\n";
+    t+="\n✅ Maks innkjøpspris: "+fmt(kostUtenMva)+"\n";
+    t+="\nFaktor: ×"+faktor+" · MVA: "+mva+"%";
+  }
+  window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank");
+}
+
+// ── STAFF PRINT (name + price only, no cost/margin) ──────
+function printStaffList(){
+  if(history.length===0){showToast("⚠️ Ingen data å skrive ut");return;}
+  var now=new Date().toLocaleDateString("no-NO",{day:"2-digit",month:"long",year:"numeric"});
+  var rows=history.map(function(h,i){
+    var isRev=h.mode==="rev";
+    var priceVal=isRev?h.kostUtenMva:h.salg;
+    return "<tr style=\"background:"+(i%2===0?"#f9fafb":"#fff")+"\">"+
+      "<td style=\"padding:14px 10px;font-size:13pt;font-weight:600\">"+h.name+"</td>"+
+      "<td style=\"padding:14px 10px;text-align:right;font-size:16pt;font-weight:800;color:#1565c0\">"+fmt(priceVal)+"</td>"+
+      "</tr>";
+  }).join("");
+  var html="<style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;margin:0}h1{font-size:18pt;color:#0d47a1;margin:0 0 4px}.sub{font-size:9pt;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1565c0;color:#fff;padding:10px;text-align:left;font-size:10pt}td{border-bottom:1px solid #e5e7eb}</style>"+
+  "<h1>🏷️ Prisliste – Ansatte</h1>"+
+  "<div class=\"sub\">Utskriftsdato: "+now+" &nbsp;|&nbsp; Sett disse prisene på varene</div>"+
+  "<table><thead><tr><th>Produkt</th><th style=\"text-align:right\">Salgspris</th></tr></thead><tbody>"+rows+"</tbody></table>";
+  var win=window.open("","_blank","width=794,height=1123");
+  win.document.write("<!DOCTYPE html><html><body>"+html+"</body></html>");
+  win.document.close();
+  setTimeout(function(){win.print();},600);
+}
+
+// ── WHATSAPP SHARE ─────────────────────────────────────────
+function shareHistoryWA(){
+  if(history.length===0){showToast("⚠️ Ingen historikk å dele");return;}
+  var now=new Date().toLocaleDateString("no-NO",{day:"2-digit",month:"long",year:"numeric"});
+  var t="💰 PRISOVERSIKT – "+now+"\n"+"─".repeat(28)+"\n";
+  var totalFort=0;
+  for(var i=0;i<history.length;i++){
+    var h=history[i];
+    totalFort+=h.fort;
+    var isRev=h.mode==="rev";
+    t+="\n"+(i+1)+". "+h.name+(isRev?" (baklengs)":"")+"\n";
+    if(isRev)t+="   Salgspris: "+fmt(h.salg)+" → Maks innkjøp: "+fmt(h.kostUtenMva)+"\n";
+    else t+="   "+h.antall+" "+(h.unit||"stk")+" · Salgspris: "+fmt(h.salg)+"\n";
+  }
+  t+="\n"+"─".repeat(28)+"\nTotal fortjeneste: "+fmt(totalFort);
+  var enc=encodeURIComponent(t);
+  window.open("https://wa.me/?text="+enc,"_blank");
 }
 
 function printReport(){
@@ -978,6 +1189,9 @@ function clearAll(){
   document.getElementById("antall").value="";
   document.getElementById("salgPrice").value="";
   document.getElementById("prodname").value="";
+  document.getElementById("manualPrice").value="";
+  manualPriceActive=false;
+  document.getElementById("manualPriceImpact").textContent="";
   faktor=settings.defaultFaktor||1.7;
   document.getElementById("faktorBadge").textContent="×"+faktor;
   setMva(15);calc();
