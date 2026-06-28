@@ -669,8 +669,23 @@ function classicBackspace(){
 }
 function classicPercent(){
   var v=parseFloat(classicCur)||0;
-  classicCur=String(v/100);
+  var result;
+  var noteText="";
+  var vDisp=String(v).replace(".",",");
+  if(classicOperator&&classicPrevVal!==null){
+    // e.g. 100 + 15% → 15% of 100 = 15, so result becomes 100 + 15
+    result=classicPrevVal*v/100;
+    noteText=vDisp+"% av "+String(classicPrevVal).replace(".",",")+" = "+String(Math.round(result*10000)/10000).replace(".",",");
+  }else{
+    // no operation in progress: just convert to a fraction (15% → 0.15)
+    result=v/100;
+    noteText=vDisp+"% = "+String(Math.round(result*10000)/10000).replace(".",",");
+  }
+  result=Math.round(result*10000)/10000;
+  classicCur=String(result);
+  classicResultShown=false;
   classicUpdateDisplay();
+  document.getElementById("classicExpr").textContent=noteText;
 }
 function classicOp(op){
   var v=parseFloat(classicCur)||0;
