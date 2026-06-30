@@ -122,6 +122,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
 .cbtn-op{background:rgba(59,130,246,.18);color:var(--blue2)}
 .cbtn-eq{background:linear-gradient(135deg,var(--blue),#1d4ed8);color:#fff}
 .cbtn[style*="grid-column:span 2"]{aspect-ratio:auto;border-radius:40px}
+
+/* BATCH INVOICE MODE */
+.batch-row{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px}
+.batch-row-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.batch-row-num{width:24px;height:24px;border-radius:50%;background:var(--surface2);color:var(--muted);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.batch-row-name{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:9px 11px;font-size:14px;font-weight:600;color:var(--text);font-family:var(--font);outline:none}
+.batch-row-del{width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,.12);border:none;color:var(--red);font-size:13px;cursor:pointer;flex-shrink:0}
+.batch-row-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.batch-field{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:8px 9px}
+.batch-field label{font-size:9px;color:var(--muted);display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.4px}
+.batch-field input{background:transparent;border:none;outline:none;font-size:14px;font-weight:600;color:var(--text);width:100%;font-family:var(--mono)}
+.batch-field-unit{display:flex;align-items:center;justify-content:space-between}
+.batch-unit-btn{font-size:11px;font-weight:700;color:var(--cyan);background:none;border:none;cursor:pointer;padding:0}
+.batch-result-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.batch-result-row:last-child{border-bottom:none}
 .action-btn{width:100%;padding:17px;border-radius:16px;border:none;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer;letter-spacing:-.2px;transition:all .15s;margin-top:4px}
 .action-btn:active{transform:scale(.97)}
 .btn-primary{background:linear-gradient(135deg,var(--blue),#1d4ed8);color:#fff;box-shadow:0 4px 20px rgba(59,130,246,.3)}
@@ -197,6 +212,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
       <span style="color:var(--blue2)">Pris</span><span>App</span>
     </div>
     <div class="nav-btns">
+      <div class="nav-btn" onclick="goTo('batch')" title="Faktura-modus">📑</div>
       <div class="nav-btn" onclick="goTo('classic')" title="Kalkulator">🔢</div>
       <div class="nav-btn" onclick="clearAll()">🗑</div>
       <div class="nav-btn" onclick="saveToHistory()">💾</div>
@@ -384,11 +400,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
   <div class="nav">
     <div class="nav-title">Historikk</div>
     <div class="nav-btns">
+      <div class="nav-btn" id="histEditBtn" onclick="toggleHistEditMode()" title="Rediger">✏️</div>
       <div class="nav-btn" onclick="printReport()" title="Skriv ut">🖨️</div>
       <div class="nav-btn" onclick="clearHistory()" title="Slett">🗑</div>
     </div>
   </div>
   <div class="scroll-body">
+    <div id="histEditBanner" class="note-banner purple" style="display:none;margin-bottom:10px">
+      <span>✏️</span><span>Redigeringsmodus: trykk ✕ for å fjerne et produkt, eller trykk på et produkt for å endre det.</span>
+    </div>
+    <button id="histAddBtn" class="action-btn btn-ghost" style="display:none;margin-bottom:10px" onclick="addManualHistoryItem()">➕ Legg til produkt manuelt</button>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="action-btn btn-print" style="flex:1;margin-top:0" onclick="printReport()">🖨️ Full rapport</button>
       <button class="action-btn" style="flex:1;margin-top:0;background:rgba(245,158,11,.15);color:var(--orange);border:1px solid rgba(245,158,11,.25)" onclick="printStaffList()">👷 Ansatte</button>
@@ -493,6 +514,58 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
   </div>
 </div>
 
+<!-- ══ SCREEN: BATCH INVOICE MODE ══ -->
+<div class="screen hidden" id="scBatch">
+  <div class="safe-top"></div>
+  <div class="nav">
+    <div class="nav-title">📑 Faktura-modus</div>
+    <div class="nav-btns"><div class="nav-btn" onclick="goTo('calc')">✕</div></div>
+  </div>
+  <div class="scroll-body">
+    <div class="note-banner info" style="margin:0 0 12px">
+      <span>💡</span><span>Skriv inn produkter fra én eller flere fakturaer samtidig — hver rad kan ha sin egen leverandør!</span>
+    </div>
+
+    <!-- Active suppliers in this session -->
+    <div class="card-header"><span style="font-size:16px">🏭</span><span class="card-title">Leverandører i denne økten</span></div>
+    <div id="batchSupplierChips" style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input id="batchNewSupplierInput" type="text" placeholder="Ny leverandør..." style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:11px 14px;font-size:14px;color:var(--text);font-family:var(--font);outline:none">
+      <button onclick="addBatchSupplier()" style="background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:var(--blue2);border-radius:10px;padding:0 16px;font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer">➕</button>
+    </div>
+
+    <!-- Shared MVA + faktor for the whole batch -->
+    <div class="card">
+      <div class="card-header"><span style="font-size:16px">⚙️</span><span class="card-title">Felles for hele økten</span></div>
+      <div style="padding:8px 16px 14px">
+        <div class="segment3">
+          <button class="msb m15" id="batchMs15" onclick="setBatchMva(15)">MVA 15%<small>Matvarer</small></button>
+          <button class="msb" id="batchMs25" onclick="setBatchMva(25)">MVA 25%<small>Andre</small></button>
+          <button class="msb" id="batchMs0" onclick="setBatchMva(0)">Uten MVA</button>
+        </div>
+      </div>
+      <div class="faktor-row" onclick="openBatchFactorSheet()" style="border-top:1px solid var(--border)">
+        <div class="faktor-left"><small>Trykk for å endre</small><p>Brukes på alle produkter</p></div>
+        <div class="faktor-badge" id="batchFaktorBadge">×1.7</div>
+      </div>
+    </div>
+
+    <!-- Product rows -->
+    <div class="card-header"><span style="font-size:16px">📦</span><span class="card-title">Produkter (<span id="batchCount">0</span>)</span></div>
+    <div id="batchRows" style="margin-top:10px"></div>
+    <button class="action-btn btn-ghost" onclick="addBatchRow()" style="margin-bottom:10px">➕ Legg til produkt</button>
+
+    <button class="action-btn btn-primary" onclick="calcBatchAll()">🧮 Beregn alle salgspriser</button>
+
+    <div id="batchResultArea" style="display:none;margin-top:14px">
+      <div class="card-header"><span style="font-size:16px">✅</span><span class="card-title">Resultat</span></div>
+      <div class="card" id="batchResultList" style="margin-top:10px"></div>
+      <button class="action-btn btn-print" onclick="saveBatchToHistory()">💾 Lagre alle i historikk</button>
+      <button class="action-btn" style="background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3)" onclick="shareBatchWA()">💬 Del på WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SCREEN: CLASSIC CALCULATOR ══ -->
 <div class="screen hidden" id="scClassic">
   <div class="safe-top"></div>
@@ -585,7 +658,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);overscroll-b
 </div>
 
 <script>
-const K={hist:"pa_hist",sett:"pa_sett",dark:"pa_dark"};
+const K={hist:"pa_hist",sett:"pa_sett",dark:"pa_dark",batch:"pa_batch_templates"};
 function ls(k,d){try{var v=localStorage.getItem(k);return v!=null?JSON.parse(v):d;}catch(e){return d;}}
 function lsw(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){showToast("⚠️ Lagringsfeil");}}
 
@@ -669,8 +742,23 @@ function classicBackspace(){
 }
 function classicPercent(){
   var v=parseFloat(classicCur)||0;
-  classicCur=String(v/100);
+  var result;
+  var noteText="";
+  var vDisp=String(v).replace(".",",");
+  if(classicOperator&&classicPrevVal!==null){
+    // e.g. 100 + 15% → 15% of 100 = 15, so result becomes 100 + 15
+    result=classicPrevVal*v/100;
+    noteText=vDisp+"% av "+String(classicPrevVal).replace(".",",")+" = "+String(Math.round(result*10000)/10000).replace(".",",");
+  }else{
+    // no operation in progress: just convert to a fraction (15% → 0.15)
+    result=v/100;
+    noteText=vDisp+"% = "+String(Math.round(result*10000)/10000).replace(".",",");
+  }
+  result=Math.round(result*10000)/10000;
+  classicCur=String(result);
+  classicResultShown=false;
   classicUpdateDisplay();
+  document.getElementById("classicExpr").textContent=noteText;
 }
 function classicOp(op){
   var v=parseFloat(classicCur)||0;
@@ -707,6 +795,229 @@ function sendClassicToCalc(){
   calc();
   showToast("📤 Sendt til Grossistpris: "+fmt(v));
 }
+
+// ══════════════════════════════════════════
+// BATCH INVOICE MODE
+// ══════════════════════════════════════════
+var batchTemplates=ls(K.batch,{}); // { "supplier name": [ {name, cat} , ... ] }
+var batchRowCount=0;
+var batchMva=15;
+var batchFaktor=1.7;
+var batchResults=[];
+var batchSuppliers=[]; // list of supplier names active in this session
+var batchSaved=false; // guards against saving the same batch twice to history
+
+function normalizeSupplierKey(name){
+  return name.trim().toLowerCase().replace(/\s+/g," ");
+}
+
+function addBatchSupplier(){
+  var input=document.getElementById("batchNewSupplierInput");
+  var name=input.value.trim();
+  if(!name){showToast("⚠️ Skriv inn et leverandørnavn");return;}
+  var key=normalizeSupplierKey(name);
+  var exists=batchSuppliers.find(function(s){return normalizeSupplierKey(s)===key;});
+  if(exists){showToast("⚠️ "+exists+" er allerede lagt til");input.value="";return;}
+  batchSuppliers.push(name);
+  input.value="";
+  renderBatchSupplierChips();
+  // Offer to load previous invoice for this supplier if one exists
+  var tmpl=batchTemplates[key];
+  if(tmpl&&tmpl.length){
+    if(confirm("Fant forrige faktura fra "+name+" ("+tmpl.length+" produkter). Last den inn?")){
+      tmpl.forEach(function(p){addBatchRow(p.name,p.cat,name);});
+    }
+  }
+}
+function removeBatchSupplier(name){
+  batchSuppliers=batchSuppliers.filter(function(s){return s!==name;});
+  renderBatchSupplierChips();
+  // Reassign any rows that used this supplier to "no supplier" so nothing is silently lost
+  document.querySelectorAll("#batchRows .batch-row").forEach(function(row){
+    if(row.getAttribute("data-supplier")===name){
+      row.setAttribute("data-supplier","");
+      var btn=row.querySelector(".batch-sup-btn");
+      if(btn)btn.textContent="🏭 Velg leverandør";
+    }
+  });
+}
+function renderBatchSupplierChips(){
+  var el=document.getElementById("batchSupplierChips");
+  if(!batchSuppliers.length){
+    el.innerHTML="<div style=\"font-size:12px;color:var(--muted);padding:6px 0\">Ingen leverandører lagt til ennå</div>";
+    return;
+  }
+  el.innerHTML=batchSuppliers.map(function(s){
+    return "<div style=\"display:flex;align-items:center;gap:6px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);border-radius:20px;padding:6px 8px 6px 12px;font-size:12px;font-weight:600;color:var(--blue2)\">🏭 "+s+"<button onclick=\"removeBatchSupplier('"+s.replace(/'/g,"\\'")+"')\" style=\"background:none;border:none;color:var(--blue2);font-size:14px;cursor:pointer;padding:0 2px\">✕</button></div>";
+  }).join("");
+}
+
+function setBatchMva(v){
+  batchMva=v;
+  document.getElementById("batchMs0").className="msb"+(v===0?" m0":"");
+  document.getElementById("batchMs15").className="msb"+(v===15?" m15":"");
+  document.getElementById("batchMs25").className="msb"+(v===25?" m25":"");
+}
+function openBatchFactorSheet(){
+  document.getElementById("sheetInput").value=batchFaktor;
+  updateQBtns(batchFaktor);
+  document.getElementById("sheetOverlay").classList.add("open");
+  window.batchFactorSheetActive=true;
+  setTimeout(function(){document.getElementById("sheetInput").focus();},200);
+}
+
+var batchRowIdSeq=0;
+function addBatchRow(prefillName,prefillCat,prefillSupplier){
+  batchRowCount++;
+  var rowId="br_"+(++batchRowIdSeq);
+  var defaultCat=prefillCat||CATEGORIES[0].label;
+  var defaultSup=prefillSupplier||(batchSuppliers.length===1?batchSuppliers[0]:"");
+  var supLabel=defaultSup?("🏭 "+defaultSup):"🏭 Velg leverandør";
+  var html="<div class=\"batch-row\" id=\""+rowId+"\" data-cat=\""+defaultCat+"\" data-supplier=\""+(defaultSup||"")+"\">"+
+    "<div class=\"batch-row-top\">"+
+      "<div class=\"batch-row-num\">"+batchRowCount+"</div>"+
+      "<input class=\"batch-row-name\" placeholder=\"Produktnavn...\" value=\""+(prefillName||"")+"\">"+
+      "<button class=\"batch-row-del\" onclick=\"removeBatchRow('"+rowId+"')\">✕</button>"+
+    "</div>"+
+    "<div class=\"batch-row-fields\">"+
+      "<div class=\"batch-field\"><label>Totalpris</label><input type=\"text\" inputmode=\"decimal\" placeholder=\"0.00\" oninput=\"onNumInput(this)\"></div>"+
+      "<div class=\"batch-field\"><label>Antall</label><input type=\"text\" inputmode=\"decimal\" placeholder=\"1\" oninput=\"onNumInput(this)\"></div>"+
+      "<div class=\"batch-field batch-field-unit\"><div><label>Enhet</label><div class=\"batch-unit-disp\" style=\"font-size:14px;font-weight:700;color:var(--cyan)\">stk</div></div><button class=\"batch-unit-btn\" onclick=\"toggleBatchRowUnit('"+rowId+"')\">🔄</button></div>"+
+    "</div>"+
+    "<div style=\"display:flex;gap:6px;margin-top:8px\">"+
+      "<button class=\"batch-sup-btn\" onclick=\"cycleBatchRowSupplier('"+rowId+"')\" style=\"flex:1;text-align:left;background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:7px 10px;font-size:12px;color:var(--blue2);font-family:var(--font);cursor:pointer\">"+supLabel+"</button>"+
+      "<button class=\"batch-cat-btn\" onclick=\"cycleBatchRowCat('"+rowId+"')\" style=\"flex:1;text-align:left;background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:7px 10px;font-size:12px;color:var(--green);font-family:var(--font);cursor:pointer\">📂 "+defaultCat+"</button>"+
+    "</div>"+
+    "</div>";
+  document.getElementById("batchRows").insertAdjacentHTML("beforeend",html);
+  document.getElementById("batchCount").textContent=batchRowCount;
+  batchSaved=false;
+}
+function removeBatchRow(rowId){
+  var el=document.getElementById(rowId);
+  if(el)el.remove();
+  batchRowCount=document.querySelectorAll("#batchRows .batch-row").length;
+  document.getElementById("batchCount").textContent=batchRowCount;
+}
+function cycleBatchRowSupplier(rowId){
+  if(!batchSuppliers.length){showToast("⚠️ Legg til en leverandør først");return;}
+  var row=document.getElementById(rowId);
+  var cur=row.getAttribute("data-supplier");
+  var idx=batchSuppliers.indexOf(cur);
+  idx=(idx+1)%batchSuppliers.length;
+  var next=batchSuppliers[idx];
+  row.setAttribute("data-supplier",next);
+  row.querySelector(".batch-sup-btn").textContent="🏭 "+next;
+}
+
+function toggleBatchRowUnit(rowId){
+  var row=document.getElementById(rowId);
+  var disp=row.querySelector(".batch-unit-disp");
+  disp.textContent=disp.textContent==="stk"?"kg":"stk";
+  batchSaved=false;
+}
+function cycleBatchRowCat(rowId){
+  var row=document.getElementById(rowId);
+  var cur=row.getAttribute("data-cat");
+  var idx=CATEGORIES.findIndex(function(c){return c.label===cur;});
+  idx=(idx+1)%CATEGORIES.length;
+  var next=CATEGORIES[idx];
+  row.setAttribute("data-cat",next.label);
+  row.querySelector(".batch-cat-btn").textContent="📂 "+next.label;
+  batchSaved=false;
+}
+
+function calcBatchAll(){
+  var rows=document.querySelectorAll("#batchRows .batch-row");
+  if(!rows.length){showToast("⚠️ Legg til minst ett produkt");return;}
+  batchResults=[];
+  var skipped=0;
+  var missingSupplier=0;
+  rows.forEach(function(row){
+    var name=row.querySelector(".batch-row-name").value.trim();
+    var fields=row.querySelectorAll(".batch-field input");
+    var totalpris=parseNum(fields[0].value);
+    var antall=parseNum(fields[1].value)||1;
+    var unit=row.querySelector(".batch-unit-disp").textContent;
+    var cat=row.getAttribute("data-cat");
+    var supplier=row.getAttribute("data-supplier")||"Ukjent leverandør";
+    if(!supplier||supplier==="Ukjent leverandør")missingSupplier++;
+    if(!name||totalpris<=0){skipped++;return;}
+    var prStk=totalpris/antall;
+    var mvaAmt=batchMva>0?prStk*(batchMva/100):0;
+    var kost=prStk+mvaAmt;
+    var salg=kost*batchFaktor;
+    var fort=(salg-kost)*antall;
+    batchResults.push({name:name,supplier:supplier,gross:totalpris,antall:antall,unit:unit,cat:cat,mva:batchMva,faktor:batchFaktor,kost:kost,salg:salg,fort:fort});
+  });
+  if(!batchResults.length){showToast("⚠️ Fyll inn produktnavn og totalpris");return;}
+  batchSaved=false;
+  renderBatchResults();
+  // Save each supplier's product list as their own template for next time (grouped, normalized key)
+  var bySupplier={};
+  batchResults.forEach(function(r){
+    var key=normalizeSupplierKey(r.supplier);
+    if(!bySupplier[key])bySupplier[key]=[];
+    bySupplier[key].push({name:r.name,cat:r.cat});
+  });
+  Object.keys(bySupplier).forEach(function(key){
+    batchTemplates[key]=bySupplier[key];
+  });
+  lsw(K.batch,batchTemplates);
+  var msg="✅ Beregnet "+batchResults.length+" produkter!";
+  if(skipped>0)msg="✅ Beregnet "+batchResults.length+" produkter ("+skipped+" hoppet over)";
+  if(missingSupplier>0)msg+=" ⚠️ "+missingSupplier+" uten leverandør";
+  showToast(msg);
+}
+
+function renderBatchResults(){
+  var area=document.getElementById("batchResultArea");
+  var list=document.getElementById("batchResultList");
+  area.style.display="block";
+  var totalFort=0;
+  list.innerHTML=batchResults.map(function(r){
+    totalFort+=r.fort;
+    var catObj=CATEGORIES.find(function(c){return c.label===r.cat;});
+    var emoji=catObj?catObj.emoji:"📦";
+    return "<div class=\"batch-result-row\"><div style=\"font-size:20px\">"+emoji+"</div><div style=\"flex:1\"><div style=\"font-size:14px;font-weight:600\">"+r.name+"</div><div style=\"font-size:11px;color:var(--muted2);margin-top:2px\">🏭 "+r.supplier+" · "+r.antall+" "+r.unit+" · MVA "+r.mva+"% · ×"+r.faktor+"</div></div><div style=\"text-align:right\"><div style=\"font-family:var(--mono);font-weight:700;color:var(--blue2)\">"+fmt(r.salg)+"</div><div style=\"font-size:10px;color:var(--green2)\">+"+fmt(r.fort)+"</div></div></div>";
+  }).join("");
+  area.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function saveBatchToHistory(){
+  if(!batchResults.length){showToast("⚠️ Ingen resultater å lagre");return;}
+  if(batchSaved){
+    if(!confirm("Disse produktene er allerede lagret i historikken. Lagre på nytt (kan gi duplikater)?"))return;
+  }
+  batchResults.forEach(function(r){
+    history.unshift({mode:"fwd",name:r.name,gross:r.gross,antall:r.antall,unit:r.unit,cat:r.cat,mva:r.mva,faktor:r.faktor,kost:r.kost,salg:r.salg,fort:r.fort,manual:false,time:Date.now(),batchSupplier:r.supplier});
+  });
+  if(history.length>200)history=history.slice(0,200);
+  lsw(K.hist,history);
+  batchSaved=true;
+  showToast("💾 "+batchResults.length+" produkter lagret i historikk!");
+}
+
+function shareBatchWA(){
+  if(!batchResults.length){showToast("⚠️ Ingen resultater å dele");return;}
+  var now=new Date().toLocaleDateString("no-NO",{day:"2-digit",month:"long",year:"numeric"});
+  var t="📑 FAKTURA-BEREGNING\n📅 "+now+"\n"+"─".repeat(28)+"\n";
+  var bySupplier={};
+  batchResults.forEach(function(r){
+    if(!bySupplier[r.supplier])bySupplier[r.supplier]=[];
+    bySupplier[r.supplier].push(r);
+  });
+  var totalFort=0;
+  Object.keys(bySupplier).forEach(function(sup){
+    t+="\n🏭 "+sup+"\n";
+    bySupplier[sup].forEach(function(r,i){
+      totalFort+=r.fort;
+      t+="  "+(i+1)+". "+r.name+" — "+r.antall+" "+r.unit+" · "+fmt(r.salg)+"\n";
+    });
+  });
+  t+="\n"+"─".repeat(28)+"\nTotal fortjeneste: "+fmt(totalFort)+"\nAntall produkter: "+batchResults.length;
+  window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank");
+}
 let mva=15, faktor=1.7;
 let settings=ls(K.sett,{profit:true,autoSave:true,defaultFaktor:1.7});
 let history=ls(K.hist,[]);
@@ -737,11 +1048,12 @@ function fmtShort(n){if(n>=1000)return (n/1000).toFixed(1).replace(/\.0$/,"")+"k
 
 // ── NAVIGATION ──────────────────────────────────────────
 function goTo(screen){
-  var map={calc:"scCalc",hist:"scHist",settings:"scSettings",qrsync:"scQrsync",classic:"scClassic"};
+  var map={calc:"scCalc",hist:"scHist",settings:"scSettings",qrsync:"scQrsync",classic:"scClassic",batch:"scBatch"};
   var screens=document.querySelectorAll(".screen");
   for(var i=0;i<screens.length;i++)screens[i].classList.add("hidden");
   document.getElementById(map[screen]).classList.remove("hidden");
   if(screen==="hist")renderHistory();
+  if(screen==="batch"){renderBatchSupplierChips();if(batchRowCount===0)addBatchRow();}
   var items=document.querySelectorAll(".bnav-item");
   var sc=["calc","hist","settings"];
   for(var j=0;j<items.length;j++)items[j].classList.toggle("active",sc[j%3]===screen);
@@ -814,12 +1126,13 @@ function setMva(v){
 
 // ── FAKTOR SHEET ────────────────────────────────────────
 function openSheet(){
+  window.batchFactorSheetActive=false;
   document.getElementById("sheetInput").value=faktor;
   updateQBtns(faktor);
   document.getElementById("sheetOverlay").classList.add("open");
   setTimeout(function(){document.getElementById("sheetInput").focus();},200);
 }
-function closeSheet(){document.getElementById("sheetOverlay").classList.remove("open");}
+function closeSheet(){document.getElementById("sheetOverlay").classList.remove("open");window.batchFactorSheetActive=false;}
 function pickQ(v){document.getElementById("sheetInput").value=v;updateQBtns(v);}
 function updateQBtns(v){
   var btns=document.querySelectorAll(".qbtn");
@@ -829,13 +1142,21 @@ function updateQBtns(v){
 }
 function confirmSheet(){
   var v=parseNum(document.getElementById("sheetInput").value);
+  var wasBatch=!!window.batchFactorSheetActive;
   if(!isNaN(v)&&v>0){
-    faktor=v;
-    var d="×"+v;
-    document.getElementById("faktorBadge").textContent=d;
-    document.getElementById("settingFaktor").textContent=d;
+    if(wasBatch){
+      batchFaktor=v;
+      document.getElementById("batchFaktorBadge").textContent="×"+v;
+    }else{
+      faktor=v;
+      var d="×"+v;
+      document.getElementById("faktorBadge").textContent=d;
+      document.getElementById("settingFaktor").textContent=d;
+    }
   }
-  closeSheet();calc();
+  window.batchFactorSheetActive=false;
+  closeSheet();
+  if(!wasBatch)calc();
 }
 
 // ── CALCULATE ────────────────────────────────────────────
@@ -1050,6 +1371,16 @@ function saveToHistory(){
 
 // ── HISTORY ──────────────────────────────────────────────
 const COLORS=["#3b82f6","#10b981","#f97316","#22d3ee","#a78bfa","#fbbf24"];
+var histEditMode=false;
+function toggleHistEditMode(){
+  histEditMode=!histEditMode;
+  document.getElementById("histEditBtn").style.background=histEditMode?"rgba(167,139,250,.2)":"";
+  document.getElementById("histEditBtn").textContent=histEditMode?"✓":"✏️";
+  document.getElementById("histEditBanner").style.display=histEditMode?"flex":"none";
+  document.getElementById("histAddBtn").style.display=histEditMode?"block":"none";
+  renderHistory();
+}
+
 function renderHistory(){
   var el=document.getElementById("histList");
   if(history.length===0){
@@ -1079,9 +1410,42 @@ function renderHistory(){
       ? "Salgspris → Kjøp · "+mvaStr+" · ×"+h.faktor+" · "+ts
       : catEmoji+h.antall+" "+(h.unit||"stk")+" · "+mvaStr+" · ×"+h.faktor+" · "+ts;
     var modeIcon=isRev?"🔍 ":"";
+    if(histEditMode){
+      return "<div class=\"hist-item\" style=\"cursor:default\"><div class=\"hist-dot\" style=\"background:"+c+"\"></div><div class=\"hist-body\"><input value=\""+h.name.replace(/\"/g,"&quot;")+"\" oninput=\"editHistName("+i+",this.value)\" style=\"background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;font-size:13px;font-weight:600;color:var(--text);font-family:var(--font);width:100%;margin-bottom:4px;outline:none\"><div class=\"hist-meta\">"+meta+"</div>"+staleWarning+"</div><div style=\"display:flex;align-items:center;gap:8px\"><input type=\"text\" inputmode=\"decimal\" value=\""+priceVal.toFixed(2)+"\" oninput=\"onNumInput(this);editHistPrice("+i+",this.value)\" style=\"background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;font-size:13px;font-weight:700;color:var(--blue2);font-family:var(--mono);width:70px;text-align:right;outline:none\"><button onclick=\"deleteHistItem("+i+")\" style=\"width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,.15);border:none;color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0\">✕</button></div></div>";
+    }
     return "<div class=\"hist-item\" onclick=\"loadFromHistory("+i+")\"><div class=\"hist-dot\" style=\"background:"+c+"\"></div><div class=\"hist-body\"><div class=\"hist-name\">"+modeIcon+h.name+"</div><div class=\"hist-meta\">"+meta+"</div>"+staleWarning+"</div><div><div class=\"hist-price"+(isRev?" rev":"")+"\">"+fmt(priceVal)+"</div><div class=\"hist-profit\">+"+fmtShort(h.fort)+"</div></div></div>";
   }).join("");
 }
+
+function editHistName(i,val){
+  if(history[i])history[i].name=val;
+  lsw(K.hist,history);
+}
+function editHistPrice(i,val){
+  var h=history[i];if(!h)return;
+  var v=parseNum(val);
+  if(v<=0)return;
+  if(h.mode==="rev"){
+    h.kostUtenMva=v;
+  }else{
+    var oldKost=h.kost;
+    h.salg=v;
+    h.fort=(v-oldKost)*h.antall;
+  }
+  lsw(K.hist,history);
+}
+function deleteHistItem(i){
+  history.splice(i,1);
+  lsw(K.hist,history);
+  renderHistory();
+  showToast("🗑 Produkt fjernet");
+}
+function addManualHistoryItem(){
+  history.unshift({mode:"fwd",name:"Nytt produkt",gross:0,antall:1,unit:"stk",cat:CATEGORIES[0].label,mva:15,faktor:1.7,kost:0,salg:0,fort:0,manual:true,time:Date.now()});
+  lsw(K.hist,history);
+  renderHistory();
+}
+
 
 function loadFromHistory(i){
   var h=history[i];
